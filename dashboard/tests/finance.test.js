@@ -115,16 +115,30 @@ test('spending and cash flow exclude both transfer legs while history and balanc
   assert.equal(timeline.at(-1)['NL02:EUR'], 10000)
 })
 
-test('detection is independent of selected accounts and asymmetric date coverage', () => {
+test('transfers count as external unless both imported accounts are selected', () => {
   const period = summarizePeriod(transferTransactions, ['NL01:EUR'], '2025-01-02', '2025-01-02')
+  assert.equal(period.internalTransfers.length, 0)
+  assert.equal(period.outgoing, 11600)
+  assert.equal(period.incoming, 0)
+  assert.equal(period.reportingTransactions.length, 3)
+  assert.equal(period.internalTransferIds.has('a1'), false)
+  const inbound = summarizePeriod(transferTransactions, ['NL02:EUR'], '2025-01-03', '2025-01-03')
+  assert.equal(inbound.incoming, 10000)
+  assert.equal(inbound.transferIncoming, 0)
+  assert.equal(inbound.internalTransferIds.has('b1'), false)
+  assert.deepEqual([...findInternalTransfers(transferTransactions, [])], [])
+  assert.deepEqual([...findInternalTransfers(transferTransactions, ['NL01:EUR'])], [])
+  assert.deepEqual([...findInternalTransfers(transferTransactions, ['NL01:EUR', 'NL02:EUR'])], ['a1', 'b1'])
+})
+
+test('selected-account transfer detection still uses full date coverage and selected currencies', () => {
+  const period = summarizePeriod(transferTransactions, ['NL01:EUR', 'NL02:EUR'], '2025-01-02', '2025-01-02')
   assert.equal(period.internalTransfers.length, 1)
   assert.equal(period.outgoing, 1600)
   assert.equal(period.incoming, 0)
-  const inbound = summarizePeriod(transferTransactions, ['NL02:EUR'], '2025-01-03', '2025-01-03')
-  assert.equal(inbound.incoming, 0)
-  assert.equal(inbound.transferIncoming, 10000)
   const crossCurrency = [transferTransactions[0], { ...transferTransactions[1], currency: 'USD', accountId: 'NL02:USD' }]
-  assert.equal(summarizePeriod(crossCurrency, ['NL01:EUR'], '2025-01-01', '2025-01-31').outgoing, 0)
+  assert.equal(summarizePeriod(crossCurrency, ['NL01:EUR'], '2025-01-01', '2025-01-31').outgoing, 10000)
+  assert.deepEqual([...findInternalTransfers(crossCurrency, ['NL01:EUR', 'NL02:USD'])], ['a1', 'b1'])
 })
 
 test('category and merchant analytics exclude transfers even when manually categorized', () => {
@@ -137,6 +151,10 @@ test('category and merchant analytics exclude transfers even when manually categ
   assert.equal(category.count, 3)
   assert.equal(merchants.reduce((sum, group) => sum + group.outgoing, 0), 1600)
   assert.equal(merchants.some((group) => group.name === 'Savings transfer'), false)
+  const singleAccount = summarizePeriod(transferTransactions, ['NL01:EUR'], '2025-01-01', '2025-01-31')
+  const singleCategory = categorySummary(singleAccount.reportingTransactions, state).find((group) => group.id === 'groceries')
+  assert.equal(singleCategory.outgoing, 11600)
+  assert.equal(merchantSummary(singleAccount.reportingTransactions, state, 'groceries').some((group) => group.name === 'Savings transfer'), true)
 })
 
 test('chart granularity follows presets and custom range lengths', () => {

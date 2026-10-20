@@ -140,13 +140,15 @@ export function balanceTimeline(transactions, accountIds, start, end) {
   return points
 }
 
-export function findInternalTransfers(transactions) {
+export function findInternalTransfers(transactions, accountIds = transactions.map((transaction) => transaction.accountId)) {
   const normalizeAccount = (value) => String(value || '').replace(/\s/g, '').toUpperCase()
-  const importedAccounts = new Set(transactions.map((transaction) => normalizeAccount(transaction.account)).filter(Boolean))
-  return new Set(transactions.filter((transaction) => {
+  const selectedIds = new Set(accountIds)
+  const selectedTransactions = transactions.filter((transaction) => selectedIds.has(transaction.accountId))
+  const selectedAccounts = new Set(selectedTransactions.map((transaction) => normalizeAccount(transaction.account)).filter(Boolean))
+  return new Set(selectedTransactions.filter((transaction) => {
     const account = normalizeAccount(transaction.account)
     const counterAccount = normalizeAccount(transaction.counterAccount)
-    return counterAccount && counterAccount !== account && importedAccounts.has(counterAccount)
+    return counterAccount && counterAccount !== account && selectedAccounts.has(counterAccount)
   }).map((transaction) => transaction.id))
 }
 
@@ -201,7 +203,7 @@ export function cashflowByInterval(transactions, interval = 'month', start, end)
 }
 
 export function summarizePeriod(transactions, accountIds, start, end) {
-  const internalTransferIds = findInternalTransfers(transactions)
+  const internalTransferIds = findInternalTransfers(transactions, accountIds)
   const filtered = transactions.filter((transaction) => accountIds.includes(transaction.accountId) && transaction.date >= start && transaction.date <= end)
   const reportingTransactions = filtered.filter((transaction) => !internalTransferIds.has(transaction.id))
   const internalTransfers = filtered.filter((transaction) => internalTransferIds.has(transaction.id))

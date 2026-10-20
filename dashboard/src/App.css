@@ -81,6 +81,7 @@ input[type='date'] { width: 125px; }
 .mini-dot.green { background: #77af8e; }
 .mini-dot.red { background: #d59a8d; }
 .positive { color: #138568; }
+.negative { color: #b5473b; }
 .balance-section { background: #fff; padding: 23px 24px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .section-subtitle { font-size: 10px; color: #8b968f; margin-top: 5px; }

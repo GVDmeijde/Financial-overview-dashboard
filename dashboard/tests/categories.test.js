@@ -182,7 +182,7 @@ test('monthly category stacks honor period/account/currency scope and internal t
     { ...transaction, id: 'other-currency', account: 'US01', accountId: 'US01:USD', counterAccount: 'US99', date: '2025-01-02', amount: -5000 },
     { ...transaction, id: 'outside-period', account: 'NL01', accountId: 'NL01:EUR', counterAccount: 'NL99', date: '2025-02-01', amount: -800 },
   ]
-  const period = summarizePeriod(transactions, ['NL01:EUR'], '2025-01-01', '2025-01-31')
+  const period = summarizePeriod(transactions, ['NL01:EUR', 'NL02:EUR'], '2025-01-01', '2025-01-31')
   const months = monthlyCategorySpending(period.reportingTransactions, state)
   assert.equal(months.length, 1)
   assert.equal(months[0].total, period.outgoing)
