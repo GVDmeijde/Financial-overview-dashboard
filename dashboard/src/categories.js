@@ -14,6 +14,7 @@ export function emptyCategorization() {
 
 const normalize = (value) => value.normalize('NFKC').trim().toLocaleLowerCase('en-GB')
 const filterCache = new Map()
+const ruleFilterCache = new WeakMap()
 
 export function compileFilter(pattern, matchType = 'text', exact = false) {
   const key = JSON.stringify([pattern, matchType, exact])
@@ -32,6 +33,18 @@ export function compileFilter(pattern, matchType = 'text', exact = false) {
   } catch (error) {
     filter = { test: () => false, error: `Invalid regex: ${error.message}` }
   }
+  if (!filter.error) {
+    const test = filter.test
+    const results = new Map()
+    filter.test = (value) => {
+      const cached = results.get(value)
+      if (cached !== undefined) return cached
+      const result = test(value)
+      if (results.size >= 4096) results.delete(results.keys().next().value)
+      results.set(value, result)
+      return result
+    }
+  }
   if (filterCache.size >= 128) filterCache.delete(filterCache.keys().next().value)
   filterCache.set(key, filter)
   return filter
@@ -40,7 +53,12 @@ export function compileFilter(pattern, matchType = 'text', exact = false) {
 export function matchesRule(transaction, rule) {
   if (rule.direction === 'out' && transaction.amount >= 0) return false
   if (rule.direction === 'in' && transaction.amount <= 0) return false
-  return compileFilter(rule.value, rule.matchType, rule.field === 'counterAccount').test(transaction[rule.field] || '')
+  let prepared = ruleFilterCache.get(rule)
+  if (!prepared || prepared.field !== rule.field || prepared.value !== rule.value || prepared.matchType !== rule.matchType) {
+    prepared = { field: rule.field, value: rule.value, matchType: rule.matchType, filter: compileFilter(rule.value, rule.matchType, rule.field === 'counterAccount') }
+    ruleFilterCache.set(rule, prepared)
+  }
+  return prepared.filter.test(transaction[rule.field] || '')
 }
 
 export function transactionCategory(transaction, categorization) {

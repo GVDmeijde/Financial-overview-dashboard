@@ -169,12 +169,18 @@ export function chartBucketKey(date, interval) {
   return monday.toISOString().slice(0, 10)
 }
 
+const chartPeriodFormatters = new Map()
+
 export function formatChartPeriod(period, interval, detailed = false) {
   const date = new Date(`${period.length === 7 ? `${period}-01` : period}T00:00:00Z`)
-  const options = interval === 'month'
-    ? { month: detailed ? 'long' : 'short', year: detailed ? 'numeric' : '2-digit' }
-    : { day: 'numeric', month: detailed ? 'long' : 'short', ...(detailed ? { year: 'numeric' } : {}) }
-  const label = date.toLocaleDateString('en-GB', { ...options, timeZone: 'UTC' })
+  const key = `${interval}:${detailed}`
+  if (!chartPeriodFormatters.has(key)) {
+    const options = interval === 'month'
+      ? { month: detailed ? 'long' : 'short', year: detailed ? 'numeric' : '2-digit' }
+      : { day: 'numeric', month: detailed ? 'long' : 'short', ...(detailed ? { year: 'numeric' } : {}) }
+    chartPeriodFormatters.set(key, new Intl.DateTimeFormat('en-GB', { ...options, timeZone: 'UTC' }))
+  }
+  const label = chartPeriodFormatters.get(key).format(date)
   return interval === 'week' && detailed ? `Week of ${label}` : label
 }
 

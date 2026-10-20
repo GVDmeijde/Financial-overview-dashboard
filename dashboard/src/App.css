@@ -15,6 +15,7 @@ nav { margin: 12px 0 30px; display: flex; flex-direction: column; gap: 5px; }
 .nav-item.active { color: #087566; background: #e9f4ef; font-weight: 600; }
 .nav-count { margin-left: auto; background: #e9eeeb; padding: 1px 6px; font-size: 10px; border-radius: 4px; }
 .accounts-label { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }
+.account-update-status { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; color: var(--green); }
 .text-button { display: inline-flex; align-items: center; gap: 5px; background: transparent; color: var(--green); font-size: 11px; font-weight: 600; padding: 4px 0; }
 .text-button:hover { color: #034e43; }
 .account-list { display: flex; flex-direction: column; gap: 11px; }

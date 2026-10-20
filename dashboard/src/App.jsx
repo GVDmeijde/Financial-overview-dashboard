@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useRef, useState } from 'react'
+import { useDeferredValue, useEffect, useRef, useState, useTransition } from 'react'
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { ArrowDownLeft, ArrowDownToLine, ArrowLeftRight, ArrowRight, ArrowUpRight, ChartNoAxesCombined, Check, ChevronLeft, ChevronRight, CircleAlert, Eye, EyeOff, FileCheck2, FolderInput, Landmark, LayoutDashboard, ListFilter, LoaderCircle, RefreshCw, Regex, Search, ShieldCheck, Tags, Upload, Wallet, X } from 'lucide-react'
 import Papa from 'papaparse'
@@ -15,7 +15,9 @@ import '@fontsource/manrope/700.css'
 import './App.css'
 
 const colors = ['#087f70', '#4285d4', '#bd7b12', '#bb5274', '#6f72ba', '#647762']
-const shortDate = (date) => new Date(typeof date === 'number' ? date : `${date}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
+const shortDateFormatter = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
+const balanceTickFormatter = new Intl.DateTimeFormat('en-GB', { month: 'short', year: '2-digit', timeZone: 'UTC' })
+const shortDate = (date) => shortDateFormatter.format(new Date(typeof date === 'number' ? date : `${date}T12:00:00Z`))
 const accountName = (account) => `Account ${account.iban.slice(-4)}`
 const compact = (value) => new Intl.NumberFormat('en-GB', { notation: 'compact', maximumFractionDigits: 1 }).format(value / 100)
 const formatMoney = (value, currency = 'EUR') => new Intl.NumberFormat('en-GB', { style: 'currency', currency }).format(value / 100)
@@ -29,6 +31,35 @@ async function fetchData(signal) {
 
 function IconButton({ title, children, ...props }) {
   return <button className="icon-button" type="button" title={title} aria-label={title} {...props}>{children}</button>
+}
+
+function AccountSelection({ accounts, money, initialSelection, onChange }) {
+  const [selection, setSelection] = useState(initialSelection)
+  const latestSelection = useRef(initialSelection)
+  const [pending, startTransition] = useTransition()
+  const selectedIds = accounts.filter((account) => selection === null || selection.includes(account.id)).map((account) => account.id)
+
+  function update(next) {
+    latestSelection.current = next
+    setSelection(next)
+    startTransition(() => onChange(next))
+  }
+
+  function toggle(id) {
+    const next = new Set(accounts.filter((account) => latestSelection.current === null || latestSelection.current.includes(account.id)).map((account) => account.id))
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    update([...next])
+  }
+
+  return <>
+    <div className="accounts-label"><span className="nav-label">BANK ACCOUNTS</span><span className="account-update-status" role="status">{pending && <><LoaderCircle size={12} className="spin" /><span className="sr-only">Updating account reports</span></>}</span><button className="text-button" onClick={() => update(null)}>Select all</button></div>
+    <div className="account-list" aria-busy={pending}>{accounts.map((account, index) => <label className={`account-option ${selectedIds.includes(account.id) ? 'selected' : ''}`} key={account.id}>
+      <input type="checkbox" checked={selectedIds.includes(account.id)} onChange={() => toggle(account.id)} aria-label={`Include ${accountName(account)}`} />
+      <span className="account-top"><span className="bank-icon" style={{ color: colors[index % colors.length], background: `${colors[index % colors.length]}12` }}><Landmark size={17} /></span><span><strong>{accountName(account)}</strong><small>{account.iban.replace(/(.{4})/g, '$1 ').trim()}</small></span><span className="account-check" style={{ '--account-color': colors[index % colors.length] }}>{selectedIds.includes(account.id) && <Check size={12} />}</span></span>
+      <span className="account-balance">{money(account.balance, account.currency)}<small>{shortDate(account.lastDate)}</small></span>
+    </label>)}</div>
+  </>
 }
 
 function TransactionPageInput({ currentPage, pageCount, onChange, disabled }) {
@@ -201,14 +232,6 @@ function App() {
     setView('categories')
   }
 
-  function toggleAccount(id) {
-    const next = new Set(activeIds)
-    if (next.has(id)) next.delete(id)
-    else next.add(id)
-    setSelection([...next])
-    setPage(0)
-  }
-
   async function importFiles(files) {
     if (!files.length || busy) return
     setBusy(true)
@@ -262,7 +285,7 @@ function App() {
 
   const chartTooltip = ({ active, payload, label }) => active && payload?.length ? <div className="chart-tooltip"><strong>{typeof label === 'number' ? shortDate(label) : formatChartPeriod(String(label), interval, true)}</strong>{payload.map((item) => <div key={item.dataKey}><span><i style={{ background: item.color }} />{item.name}</span><b>{money(item.value)}</b></div>)}</div> : null
 
-  const chartAxes = <><CartesianGrid vertical={false} stroke="#e7ece9" strokeDasharray="3 4" /><XAxis dataKey="timestamp" type="number" scale="time" domain={['dataMin', 'dataMax']} tickFormatter={(value) => new Date(value).toLocaleDateString('en-GB', { month: 'short', year: '2-digit', timeZone: 'UTC' })} minTickGap={65} axisLine={false} tickLine={false} tickMargin={12} /><YAxis tickFormatter={privateAmounts ? () => '****' : compact} axisLine={false} tickLine={false} width={60} /><Tooltip content={chartTooltip} /></>
+  const chartAxes = <><CartesianGrid vertical={false} stroke="#e7ece9" strokeDasharray="3 4" /><XAxis dataKey="timestamp" type="number" scale="time" domain={['dataMin', 'dataMax']} tickFormatter={(value) => balanceTickFormatter.format(value)} minTickGap={65} axisLine={false} tickLine={false} tickMargin={12} /><YAxis tickFormatter={privateAmounts ? () => '****' : compact} axisLine={false} tickLine={false} width={60} /><Tooltip content={chartTooltip} /></>
 
   return <div className="app-shell">
     <input ref={fileInput} type="file" accept=".csv,text/csv" multiple className="sr-only" tabIndex={-1} onChange={(event) => importFiles([...event.target.files])} />
@@ -274,12 +297,7 @@ function App() {
       <nav aria-label="Main navigation">{[
         ['overview', LayoutDashboard, 'Overview'], ['transactions', ListFilter, 'Transactions'], ['categories', Tags, 'Categories'], ['imports', FolderInput, 'Imports'],
       ].map(([key, Icon, label]) => <button key={key} className={view === key || (view === 'category' && key === 'categories') ? 'nav-item active' : 'nav-item'} onClick={() => setView(key)}><Icon size={18} /><span>{label}</span>{key === 'imports' && <span className="nav-count">{data.files.length}</span>}</button>)}</nav>
-      <div className="accounts-label"><span className="nav-label">BANK ACCOUNTS</span><button className="text-button" onClick={() => { setSelection(null); setPage(0) }}>Select all</button></div>
-      <div className="account-list">{accounts.map((account, index) => <label className={`account-option ${activeIds.includes(account.id) ? 'selected' : ''}`} key={account.id}>
-        <input type="checkbox" checked={activeIds.includes(account.id)} onChange={() => toggleAccount(account.id)} aria-label={`Include ${accountName(account)}`} />
-        <span className="account-top"><span className="bank-icon" style={{ color: colors[index % colors.length], background: `${colors[index % colors.length]}12` }}><Landmark size={17} /></span><span><strong>{accountName(account)}</strong><small>{account.iban.replace(/(.{4})/g, '$1 ').trim()}</small></span><span className="account-check" style={{ '--account-color': colors[index % colors.length] }}>{activeIds.includes(account.id) && <Check size={12} />}</span></span>
-        <span className="account-balance">{money(account.balance, account.currency)}<small>{shortDate(account.lastDate)}</small></span>
-      </label>)}</div>
+      <AccountSelection key={activeCurrency} accounts={accounts} money={money} initialSelection={selection} onChange={(next) => { setSelection(next); setPage(0) }} />
       <div className="sidebar-bottom"><span className="local-dot" /><span>Local workspace</span><ShieldCheck size={15} /></div>
     </aside>
     <div className="main-shell">

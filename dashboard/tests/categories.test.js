@@ -16,6 +16,34 @@ test('rules match case-insensitive text, exact counter accounts, and direction',
   assert.equal(matchesRule(transaction, { ...rule, value: ' ' }), false)
 })
 
+test('prepared rule matchers refresh after changes to patterns, fields, modes, and directions', () => {
+  const edited = { ...rule }
+  assert.equal(matchesRule(transaction, edited), true)
+  edited.value = 'Other merchant'
+  assert.equal(matchesRule(transaction, edited), false)
+  edited.value = 'Weekly'
+  edited.field = 'description'
+  assert.equal(matchesRule(transaction, edited), true)
+  edited.value = '^Weekly.*'
+  assert.equal(matchesRule(transaction, edited), false)
+  edited.matchType = 'regex'
+  assert.equal(matchesRule(transaction, edited), true)
+  edited.direction = 'in'
+  assert.equal(matchesRule(transaction, edited), false)
+  edited.direction = 'all'
+  assert.equal(matchesRule(transaction, edited), true)
+})
+
+test('cached filters preserve true and false matches after bounded cache eviction', () => {
+  const filter = compileFilter('^AH\\s+', 'regex')
+  assert.equal(filter.test('AH Bemmel'), true)
+  assert.equal(filter.test('Other'), false)
+  for (let index = 0; index < 4200; index++) filter.test(`Merchant ${index}`)
+  assert.equal(filter.test('AH Bemmel'), true)
+  assert.equal(filter.test('Other'), false)
+  assert.equal(filter.test('AH Opheusden'), true)
+})
+
 test('manual categories and explicit uncategorized override rules; reset restores rules', () => {
   let state = update(emptyCategorization(), { action: 'saveRule', rule })
   assert.equal(transactionCategory(transaction, state), 'groceries')
