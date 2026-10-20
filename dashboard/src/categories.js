@@ -1,4 +1,5 @@
 import { RE2JS } from 're2js'
+import { cashflowByInterval, chartBucketKey } from './finance.js'
 
 export const defaultCategories = [
   { id: 'groceries', name: 'Groceries', color: '#087f70' },
@@ -56,6 +57,24 @@ export function categorySummary(transactions, categorization) {
     group.incoming += Math.max(0, transaction.amount)
   }
   return [...groups.values()].sort((left, right) => right.outgoing - left.outgoing)
+}
+
+export function monthlyCategorySpending(transactions, categorization) {
+  return categorySpendingByInterval(transactions, categorization).map(({ period, ...bucket }) => ({ month: period, ...bucket }))
+}
+
+export function categorySpendingByInterval(transactions, categorization, interval = 'month', start, end) {
+  const categoryIds = [...categorization.categories.map((category) => category.id), '']
+  const buckets = new Map(cashflowByInterval(transactions, interval, start, end).map((bucket) => [bucket.period, { period: bucket.period, total: 0, categories: Object.fromEntries(categoryIds.map((id) => [id, 0])) }]))
+  for (const transaction of transactions) {
+    if (transaction.amount >= 0 || (start && transaction.date < start) || (end && transaction.date > end)) continue
+    const resolvedId = transactionCategory(transaction, categorization)
+    const categoryId = categoryIds.includes(resolvedId) ? resolvedId : ''
+    const bucket = buckets.get(chartBucketKey(transaction.date, interval))
+    bucket.categories[categoryId] += -transaction.amount
+    bucket.total += -transaction.amount
+  }
+  return [...buckets.values()]
 }
 
 export function merchantIdentity(transaction) {

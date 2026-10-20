@@ -101,6 +101,13 @@ input[type='date'] { width: 125px; }
 .cashflow-section, .recent-section { min-width: 0; border-top: 1px solid var(--border); padding-top: 21px; }
 .muted { font-size: 10px; color: var(--muted); }
 .cashflow-chart { height: 220px; }
+.monthly-category-section { min-width: 0; margin-top: 30px; padding-top: 23px; border-top: 1px solid var(--border); }
+.monthly-category-chart { height: 300px; width: 100%; min-width: 0; }
+.monthly-category-section .section-heading { flex-wrap: wrap; }
+.category-spending-tooltip { max-width: 300px; }
+.category-spending-tooltip > div > span { min-width: 0; overflow-wrap: anywhere; }
+.category-spending-tooltip b { white-space: nowrap; }
+.chart-tooltip .chart-tooltip-total { border-top: 1px solid var(--border); margin-top: 6px; padding-top: 9px; }
 .flow-note { font-size: 9px; color: #8a958e; padding-top: 12px; }
 .recent-section .section-heading { margin-bottom: 15px; }
 .table-scroll { position: relative; overflow-x: auto; }

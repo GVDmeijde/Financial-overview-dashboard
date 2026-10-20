@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import { balanceTimeline, decodeCsv, findInternalTransfers, getAccounts, mergeImports, parseCsv, parseMoney, summarizePeriod } from '../src/finance.js'
+import { balanceTimeline, cashflowByInterval, chartBucketKey, chartInterval, decodeCsv, findInternalTransfers, formatChartPeriod, getAccounts, mergeImports, parseCsv, parseMoney, summarizePeriod } from '../src/finance.js'
 import { categorySummary, emptyCategorization, merchantSummary } from '../src/categories.js'
 
 const header = '"IBAN/BBAN","Munt","Volgnr","Datum","Bedrag","Saldo na trn","Naam tegenpartij","Omschrijving-1"'
@@ -137,4 +137,49 @@ test('category and merchant analytics exclude transfers even when manually categ
   assert.equal(category.count, 3)
   assert.equal(merchants.reduce((sum, group) => sum + group.outgoing, 0), 1600)
   assert.equal(merchants.some((group) => group.name === 'Savings transfer'), false)
+})
+
+test('chart granularity follows presets and custom range lengths', () => {
+  assert.equal(chartInterval('2026-09-19', '2026-10-19', '1'), 'day')
+  assert.equal(chartInterval('2026-07-19', '2026-10-19', '3'), 'week')
+  assert.equal(chartInterval('2026-10-01', '2026-10-19', 'ALL'), 'month')
+  assert.equal(chartInterval('2026-10-01', '2026-10-19', '12'), 'month')
+  assert.equal(chartInterval('2026-01-01', '2026-01-31'), 'day')
+  assert.equal(chartInterval('2026-01-01', '2026-02-01'), 'week')
+  assert.equal(chartInterval('2026-01-01', '2026-04-03'), 'week')
+  assert.equal(chartInterval('2026-01-01', '2026-04-04'), 'month')
+  assert.equal(chartInterval('', ''), 'month')
+})
+
+test('weekly bucket keys use UTC Mondays across month/year and daylight-saving boundaries', () => {
+  assert.equal(chartBucketKey('2026-01-04', 'week'), '2025-12-29')
+  assert.equal(chartBucketKey('2026-01-05', 'week'), '2026-01-05')
+  assert.equal(chartBucketKey('2026-03-29', 'week'), '2026-03-23')
+  assert.equal(chartBucketKey('2026-03-30', 'week'), '2026-03-30')
+  assert.equal(chartBucketKey('2026-03-30', 'day'), '2026-03-30')
+  assert.equal(chartBucketKey('2026-03-30', 'month'), '2026-03')
+  assert.equal(formatChartPeriod('2025-12-29', 'week', true), 'Week of 29 December 2025')
+  assert.equal(formatChartPeriod('2026-03-30', 'day', true), '30 March 2026')
+  assert.equal(formatChartPeriod('2026-03', 'month', true), 'March 2026')
+})
+
+test('daily and weekly cash flow includes zero buckets and clips partial boundary weeks', () => {
+  const transactions = [
+    { date: '2025-12-31', amount: -999 },
+    { date: '2026-01-02', amount: -125 },
+    { date: '2026-01-04', amount: 200 },
+    { date: '2026-01-06', amount: -75 },
+    { date: '2026-01-07', amount: -999 },
+  ]
+  const daily = cashflowByInterval(transactions, 'day', '2026-01-02', '2026-01-06')
+  assert.equal(daily.length, 5)
+  assert.deepEqual(daily[1], { period: '2026-01-03', incoming: 0, outgoing: 0 })
+  const weekly = cashflowByInterval(transactions, 'week', '2026-01-02', '2026-01-06')
+  assert.deepEqual(weekly, [{ period: '2025-12-29', incoming: 200, outgoing: 125 }, { period: '2026-01-05', incoming: 0, outgoing: 75 }])
+  for (const interval of ['day', 'week', 'month']) {
+    const buckets = cashflowByInterval(transactions, interval, '2026-01-02', '2026-01-06')
+    assert.equal(buckets.reduce((sum, bucket) => sum + bucket.outgoing, 0), 200)
+    assert.equal(buckets.reduce((sum, bucket) => sum + bucket.incoming, 0), 200)
+  }
+  assert.deepEqual(cashflowByInterval([], 'day', '2026-01-01', '2026-01-31'), [])
 })

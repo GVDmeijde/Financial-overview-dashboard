@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
+import { Bar, BarChart, CartesianGrid, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { ArrowLeft, ArrowRight, Check, ChevronLeft, ChevronRight, Pencil, Plus, Save, Tags, Trash2, X } from 'lucide-react'
-import { compileFilter, matchesRule, merchantIdentity, merchantSummary } from './categories.js'
+import { categorySpendingByInterval, compileFilter, matchesRule, merchantIdentity, merchantSummary } from './categories.js'
+import { formatChartPeriod } from './finance.js'
 
 const spendingColors = ['#087f70', '#4285d4', '#bd7b12', '#bb5274', '#7476b9', '#519ea3', '#a46c54', '#7f9154']
 
@@ -16,6 +17,30 @@ function SpendingPie({ groups, money, onSelect, label }) {
     </PieChart></ResponsiveContainer>
     <div className="pie-total"><small>Total spent</small><strong>{money(total)}</strong></div>
   </div>
+}
+
+export function CategorySpendingChart({ transactions, categorization, groups, money, formatAxis, interval = 'month', start, end }) {
+  const buckets = categorySpendingByInterval(transactions, categorization, interval, start, end)
+  const series = groups.filter((category) => category.outgoing > 0)
+  const intervalLabel = { day: 'Daily', week: 'Weekly', month: 'Monthly' }[interval]
+  return <section className="monthly-category-section" aria-label={`${intervalLabel} spending by category`}>
+    <div className="section-heading"><div><h2>{intervalLabel} spending by category</h2><p className="section-subtitle">External debits / Selected accounts and period</p></div><span className="muted">{intervalLabel}</span></div>
+    <div className="chart-legend">{series.map((category) => <span key={category.id}><i style={{ background: category.color }} />{category.name}</span>)}</div>
+    <div className="monthly-category-chart">{buckets.length && series.length ? <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+      <BarChart data={buckets} margin={{ top: 12, right: 8, left: 0, bottom: 4 }} accessibilityLayer>
+        <CartesianGrid vertical={false} stroke="#e7ece9" strokeDasharray="3 4" />
+        <XAxis dataKey="period" tickFormatter={(value) => formatChartPeriod(value, interval)} minTickGap={35} tickLine={false} axisLine={false} tickMargin={10} />
+        <YAxis tickFormatter={formatAxis} width={60} tickLine={false} axisLine={false} />
+        <Tooltip cursor={{ fill: '#e8eeea88' }} content={({ active, payload }) => {
+          const point = payload?.[0]?.payload
+          if (!active || !point) return null
+          return <div className="chart-tooltip category-spending-tooltip"><strong>{formatChartPeriod(point.period, interval, true)}</strong>{series.filter((category) => point.categories[category.id] > 0).map((category) => <div key={category.id}><span><i style={{ background: category.color }} />{category.name}</span><b>{money(point.categories[category.id])}</b></div>)}<div className="chart-tooltip-total"><span>Total money out</span><b>{money(point.total)}</b></div></div>
+        }} />
+        {series.map((category) => <Bar key={category.id} dataKey={(point) => point.categories[category.id]} name={category.name} stackId="category-spending" fill={category.color} maxBarSize={42} isAnimationActive={false} />)}
+      </BarChart>
+    </ResponsiveContainer> : <div className="empty-small">No spending in this period.</div>}</div>
+    <p className="flow-note">Transfers between imported accounts excluded. Credits and refunds are separate from spending.</p>
+  </section>
 }
 
 export function CategorySelect({ categorization, includeRules = false, ...props }) {

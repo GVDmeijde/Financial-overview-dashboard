@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { categorySummary, compileFilter, emptyCategorization, matchesRule, merchantIdentity, merchantSummary, transactionCategory, updateCategorization, validateCategorization } from '../src/categories.js'
+import { categorySpendingByInterval, categorySummary, compileFilter, emptyCategorization, matchesRule, merchantIdentity, merchantSummary, monthlyCategorySpending, transactionCategory, updateCategorization, validateCategorization } from '../src/categories.js'
+import { cashflowByInterval, summarizePeriod } from '../src/finance.js'
 
 const transaction = { id: 'NL01:EUR:1', counterparty: 'ALBERT HEIJN', description: 'Weekly groceries', counterAccount: 'NL02', amount: -1234 }
 const rule = { categoryId: 'groceries', field: 'counterparty', value: 'Albert Heijn', direction: 'out' }
@@ -147,4 +148,70 @@ test('unnamed and credit-only merchants stay visible without inventing spending'
   assert.equal(groups.find((group) => group.id === 'account:nl03').incoming, 100)
   assert.equal(groups.reduce((sum, group) => sum + group.outgoing, 0), 0)
   assert.ok(groups.some((group) => group.id === 'unknown'))
+})
+
+test('monthly category stacks reconcile exact spending and retain credit-only months', () => {
+  const state = { ...emptyCategorization(), rules: [{ ...rule, id: 'groceries-rule' }], assignments: { mortgage: 'mortgage' } }
+  const transactions = [
+    { ...transaction, id: 'later', date: '2025-03-02', amount: -303 },
+    { ...transaction, id: 'food', date: '2025-01-04', amount: -1234 },
+    { ...transaction, id: 'mortgage', date: '2025-01-15', amount: -50000 },
+    { ...transaction, id: 'unknown', counterparty: 'Other', date: '2025-01-20', amount: -101 },
+    { ...transaction, id: 'refund', date: '2025-01-21', amount: 200 },
+    { ...transaction, id: 'credit-only', date: '2025-02-01', amount: 500 },
+  ]
+  const months = monthlyCategorySpending(transactions, state)
+  assert.deepEqual(months.map((month) => month.month), ['2025-01', '2025-02', '2025-03'])
+  assert.equal(months[0].categories.groceries, 1234)
+  assert.equal(months[0].categories.mortgage, 50000)
+  assert.equal(months[0].categories[''], 101)
+  assert.equal(months[1].total, 0)
+  assert.equal(months[2].categories.groceries, 303)
+  for (const month of months) assert.equal(Object.values(month.categories).reduce((sum, amount) => sum + amount, 0), month.total)
+  const summary = categorySummary(transactions, state)
+  for (const category of summary) assert.equal(months.reduce((sum, month) => sum + month.categories[category.id], 0), category.outgoing)
+  assert.deepEqual(monthlyCategorySpending([], state), [])
+})
+
+test('monthly category stacks honor period/account/currency scope and internal transfer exclusions', () => {
+  const state = { ...emptyCategorization(), rules: [{ ...rule, id: 'groceries-rule' }] }
+  const transactions = [
+    { ...transaction, id: 'transfer-out', account: 'NL01', accountId: 'NL01:EUR', counterAccount: 'NL02', date: '2025-01-01', amount: -9000 },
+    { ...transaction, id: 'transfer-in', account: 'NL02', accountId: 'NL02:EUR', counterAccount: 'NL01', date: '2025-01-01', amount: 9000 },
+    { ...transaction, id: 'food', account: 'NL01', accountId: 'NL01:EUR', counterAccount: 'NL99', date: '2025-01-02', amount: -1234 },
+    { ...transaction, id: 'other-currency', account: 'US01', accountId: 'US01:USD', counterAccount: 'US99', date: '2025-01-02', amount: -5000 },
+    { ...transaction, id: 'outside-period', account: 'NL01', accountId: 'NL01:EUR', counterAccount: 'NL99', date: '2025-02-01', amount: -800 },
+  ]
+  const period = summarizePeriod(transactions, ['NL01:EUR'], '2025-01-01', '2025-01-31')
+  const months = monthlyCategorySpending(period.reportingTransactions, state)
+  assert.equal(months.length, 1)
+  assert.equal(months[0].total, period.outgoing)
+  assert.equal(months[0].categories.groceries, 1234)
+})
+
+test('category stacks align with cash flow at daily, weekly, and monthly intervals', () => {
+  const state = { ...emptyCategorization(), rules: [{ ...rule, id: 'groceries-rule' }], assignments: { bill: 'mortgage' } }
+  const transactions = [
+    { ...transaction, id: 'outside', date: '2025-12-31', amount: -999 },
+    { ...transaction, id: 'food', date: '2026-01-02', amount: -125 },
+    { ...transaction, id: 'refund', date: '2026-01-04', amount: 200 },
+    { ...transaction, id: 'bill', date: '2026-01-06', amount: -5000 },
+    { ...transaction, id: 'unknown', counterparty: 'Other', date: '2026-01-06', amount: -75 },
+  ]
+  for (const interval of ['day', 'week', 'month']) {
+    const cashflow = cashflowByInterval(transactions, interval, '2026-01-01', '2026-01-08')
+    const categories = categorySpendingByInterval(transactions, state, interval, '2026-01-01', '2026-01-08')
+    assert.deepEqual(categories.map((bucket) => bucket.period), cashflow.map((bucket) => bucket.period))
+    for (let index = 0; index < cashflow.length; index++) {
+      assert.equal(categories[index].total, cashflow[index].outgoing)
+      assert.equal(Object.values(categories[index].categories).reduce((sum, value) => sum + value, 0), cashflow[index].outgoing)
+    }
+    assert.equal(categories.reduce((sum, bucket) => sum + bucket.total, 0), 5200)
+  }
+  const daily = categorySpendingByInterval(transactions, state, 'day', '2026-01-01', '2026-01-08')
+  assert.equal(daily.length, 8)
+  assert.equal(daily[0].total, 0)
+  assert.equal(daily[3].total, 0)
+  assert.equal(daily[5].categories.mortgage, 5000)
+  assert.equal(daily[5].categories[''], 75)
 })

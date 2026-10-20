@@ -150,6 +150,56 @@ export function findInternalTransfers(transactions) {
   }).map((transaction) => transaction.id))
 }
 
+export function chartInterval(start, end, preset = 'CUSTOM') {
+  if (preset === '1') return 'day'
+  if (preset === '3') return 'week'
+  if (preset === '12' || preset === 'ALL') return 'month'
+  const days = (Date.parse(end) - Date.parse(start)) / 86400000 + 1
+  if (!Number.isFinite(days) || days < 1) return 'month'
+  return days <= 31 ? 'day' : days <= 93 ? 'week' : 'month'
+}
+
+export function chartBucketKey(date, interval) {
+  if (interval === 'month') return date.slice(0, 7)
+  if (interval === 'day') return date
+  const monday = new Date(`${date}T00:00:00Z`)
+  monday.setUTCDate(monday.getUTCDate() - (monday.getUTCDay() + 6) % 7)
+  return monday.toISOString().slice(0, 10)
+}
+
+export function formatChartPeriod(period, interval, detailed = false) {
+  const date = new Date(`${period.length === 7 ? `${period}-01` : period}T00:00:00Z`)
+  const options = interval === 'month'
+    ? { month: detailed ? 'long' : 'short', year: detailed ? 'numeric' : '2-digit' }
+    : { day: 'numeric', month: detailed ? 'long' : 'short', ...(detailed ? { year: 'numeric' } : {}) }
+  const label = date.toLocaleDateString('en-GB', { ...options, timeZone: 'UTC' })
+  return interval === 'week' && detailed ? `Week of ${label}` : label
+}
+
+export function cashflowByInterval(transactions, interval = 'month', start, end) {
+  if (!transactions.length) return []
+  const dates = transactions.map((transaction) => transaction.date).sort()
+  const rangeStart = start || dates[0]
+  const rangeEnd = end || dates.at(-1)
+  if (!rangeStart || !rangeEnd || rangeStart > rangeEnd) return []
+  const buckets = new Map()
+  let key = chartBucketKey(rangeStart, interval)
+  const finalKey = chartBucketKey(rangeEnd, interval)
+  while (key <= finalKey) {
+    buckets.set(key, { period: key, incoming: 0, outgoing: 0 })
+    const next = new Date(`${key.length === 7 ? `${key}-01` : key}T00:00:00Z`)
+    if (interval === 'month') next.setUTCMonth(next.getUTCMonth() + 1)
+    else next.setUTCDate(next.getUTCDate() + (interval === 'week' ? 7 : 1))
+    key = chartBucketKey(next.toISOString().slice(0, 10), interval)
+  }
+  for (const transaction of transactions) {
+    if (transaction.date < rangeStart || transaction.date > rangeEnd) continue
+    const bucket = buckets.get(chartBucketKey(transaction.date, interval))
+    bucket[transaction.amount >= 0 ? 'incoming' : 'outgoing'] += Math.abs(transaction.amount)
+  }
+  return [...buckets.values()]
+}
+
 export function summarizePeriod(transactions, accountIds, start, end) {
   const internalTransferIds = findInternalTransfers(transactions)
   const filtered = transactions.filter((transaction) => accountIds.includes(transaction.accountId) && transaction.date >= start && transaction.date <= end)
