@@ -161,6 +161,14 @@ export function chartInterval(start, end, preset = 'CUSTOM') {
   return days <= 31 ? 'day' : days <= 93 ? 'week' : 'month'
 }
 
+export function monthlyAverageMonths(start, end, preset = 'CUSTOM') {
+  if (['1', '3', '12'].includes(preset)) return Number(preset)
+  if (!start || !end || start > end) return 0
+  const firstMonth = start.slice(0, 7).split('-').map(Number)
+  const lastMonth = end.slice(0, 7).split('-').map(Number)
+  return Math.max(1, (lastMonth[0] - firstMonth[0]) * 12 + lastMonth[1] - firstMonth[1] + 1)
+}
+
 export function chartBucketKey(date, interval) {
   if (interval === 'month') return date.slice(0, 7)
   if (interval === 'day') return date

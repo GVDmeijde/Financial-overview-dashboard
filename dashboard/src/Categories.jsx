@@ -47,7 +47,7 @@ export function CategorySelect({ categorization, includeRules = false, ...props 
   return <select {...props}><option value="">Uncategorized</option>{categorization.categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}{includeRules && <option value="__rules__">Use rules (clear override)</option>}</select>
 }
 
-export function CategoryBreakdown({ groups, money, onSelect, onManage }) {
+export function CategoryBreakdown({ groups, money, onSelect, onManage, averageMonths = 1 }) {
   const total = groups.reduce((sum, group) => sum + group.outgoing, 0)
   return <section className="category-breakdown">
     <div className="section-heading"><div><h2>Spending by category</h2><p className="section-subtitle">Gross debits / Selected accounts and period</p></div>{onManage ? <button className="text-button" onClick={onManage}><Tags size={14} />Manage categories</button> : <strong className="category-total">{money(total)}</strong>}</div>
@@ -55,12 +55,12 @@ export function CategoryBreakdown({ groups, money, onSelect, onManage }) {
     <div className="category-summary">{groups.map((group) => <button className="category-summary-row" key={group.id} onClick={() => onSelect(group.id)}>
       <span className="category-summary-label"><i style={{ background: group.color }} /><span><strong>{group.name}</strong><small>{group.count.toLocaleString()} transactions</small></span></span>
       <span className="category-meter"><span style={{ width: `${total ? group.outgoing / total * 100 : 0}%`, background: group.color }} /></span>
-      <span className="category-summary-amount"><strong>{money(group.outgoing)}</strong><small>{total ? (group.outgoing / total * 100).toFixed(1) : '0.0'}%</small></span><ArrowRight size={14} />
+      <span className="category-summary-amount"><strong>{money(group.outgoing)}</strong><small>{total ? (group.outgoing / total * 100).toFixed(1) : '0.0'}%</small><small className="monthly-average">Avg {money(averageMonths ? group.outgoing / averageMonths : null)} / mo</small></span><ArrowRight size={14} />
     </button>)}</div></div>
   </section>
 }
 
-export function CategoryDetail({ category, transactions, categorization, money, onBack, onViewTransactions, renderTransactions }) {
+export function CategoryDetail({ category, transactions, categorization, money, averageMonths = 1, onBack, onViewTransactions, renderTransactions }) {
   const [merchantId, setMerchantId] = useState('all')
   const [page, setPage] = useState(0)
   const merchants = merchantSummary(transactions, categorization, category.id).map((merchant, index) => ({ ...merchant, color: spendingColors[index % spendingColors.length] }))
@@ -76,12 +76,12 @@ export function CategoryDetail({ category, transactions, categorization, money, 
       <article className="metric"><div className="metric-label">Total spent</div><strong className="metric-value">{money(category.outgoing)}</strong><small>Gross debits in selected period</small></article>
       <article className="metric"><div className="metric-label">Money returned / Credits</div><strong className="metric-value positive">{money(category.incoming)}</strong><small>Credits are separate from spending</small></article>
       <article className="metric"><div className="metric-label">Transactions</div><strong className="metric-value">{category.count.toLocaleString()}</strong><small>All payments and credits</small></article>
-      <article className="metric"><div className="metric-label">Counterparty groups</div><strong className="metric-value">{merchants.length.toLocaleString()}</strong><small>Across selected accounts</small></article>
+      <article className="metric"><div className="metric-label">Monthly average</div><strong className="metric-value">{money(averageMonths ? category.outgoing / averageMonths : null)}</strong><small>Average external spending / month</small></article>
     </section>
     <section className="category-merchant-section"><div className="section-heading"><div><h2>Where the money goes</h2><p className="section-subtitle">{category.name} / Gross debits by counterparty</p></div><span className="muted">{merchants.length} groups</span></div>
       <div className="category-spending-grid"><SpendingPie groups={merchants} money={money} onSelect={selectMerchant} label="Merchant spending pie chart" />
         <div className="merchant-list">{merchants.map((merchant) => <button className={`merchant-summary-row ${selectedId === merchant.id ? 'selected' : ''}`} aria-pressed={selectedId === merchant.id} key={merchant.id} onClick={() => selectMerchant(merchant.id)}>
-          <i style={{ background: merchant.color }} /><span><strong>{merchant.name}</strong><small>{merchant.count.toLocaleString()} transactions{merchant.incoming ? ` / Credits ${money(merchant.incoming)}` : ''}</small></span><span className="category-summary-amount"><strong>{money(merchant.outgoing)}</strong><small>{category.outgoing ? (merchant.outgoing / category.outgoing * 100).toFixed(1) : '0.0'}%</small></span><ChevronRight size={15} />
+          <i style={{ background: merchant.color }} /><span><strong>{merchant.name}</strong><small>{merchant.count.toLocaleString()} transactions{merchant.incoming ? ` / Credits ${money(merchant.incoming)}` : ''}</small></span><span className="category-summary-amount"><strong>{money(merchant.outgoing)}</strong><small>{category.outgoing ? (merchant.outgoing / category.outgoing * 100).toFixed(1) : '0.0'}%</small><small className="monthly-average">Avg {money(averageMonths ? merchant.outgoing / averageMonths : null)} / mo</small></span><ChevronRight size={15} />
         </button>)}{!merchants.length && <div className="empty-small">No transactions in this category for this period.</div>}</div>
       </div>
     </section>
@@ -109,7 +109,7 @@ function CategoryEditor({ category, saving, onChange }) {
   </form>
 }
 
-export function Categories({ categorization, transactions, groups, money, saving, onChange, onSelect, ruleDraft, setRuleDraft }) {
+export function Categories({ categorization, transactions, groups, money, averageMonths, saving, onChange, onSelect, ruleDraft, setRuleDraft }) {
   const [name, setName] = useState('')
   const [color, setColor] = useState('#647762')
   const [ruleCategory, setRuleCategory] = useState('all')
@@ -127,7 +127,7 @@ export function Categories({ categorization, transactions, groups, money, saving
   const directionNames = { out: 'Money out', in: 'Money in', all: 'All transactions' }
   const resetRule = () => setRuleDraft({ field: 'counterparty', matchType: 'text', value: '', direction: 'out', categoryId: draft.categoryId })
   return <>
-    <CategoryBreakdown groups={groups} money={money} onSelect={onSelect} />
+    <CategoryBreakdown groups={groups} money={money} averageMonths={averageMonths} onSelect={onSelect} />
     <div className="category-management">
       <section className="category-definitions"><div className="section-heading"><h2>Categories <span className="count">{categorization.categories.length}</span></h2></div>
         <div className="category-editors">{categorization.categories.map((category) => <CategoryEditor key={`${category.id}:${category.name}:${category.color}`} category={category} saving={saving} onChange={onChange} />)}</div>

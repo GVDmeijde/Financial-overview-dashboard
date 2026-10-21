@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import { balanceTimeline, cashflowByInterval, chartBucketKey, chartInterval, decodeCsv, findInternalTransfers, formatChartPeriod, getAccounts, mergeImports, parseCsv, parseMoney, summarizePeriod } from '../src/finance.js'
+import { balanceTimeline, cashflowByInterval, chartBucketKey, chartInterval, decodeCsv, findInternalTransfers, formatChartPeriod, getAccounts, mergeImports, monthlyAverageMonths, parseCsv, parseMoney, summarizePeriod } from '../src/finance.js'
 import { categorySummary, emptyCategorization, merchantSummary } from '../src/categories.js'
 
 const header = '"IBAN/BBAN","Munt","Volgnr","Datum","Bedrag","Saldo na trn","Naam tegenpartij","Omschrijving-1"'
@@ -167,6 +167,16 @@ test('chart granularity follows presets and custom range lengths', () => {
   assert.equal(chartInterval('2026-01-01', '2026-04-03'), 'week')
   assert.equal(chartInterval('2026-01-01', '2026-04-04'), 'month')
   assert.equal(chartInterval('', ''), 'month')
+})
+
+test('monthly average uses preset duration or inclusive calendar months', () => {
+  assert.equal(monthlyAverageMonths('2026-09-19', '2026-10-19', '1'), 1)
+  assert.equal(monthlyAverageMonths('2026-07-19', '2026-10-19', '3'), 3)
+  assert.equal(monthlyAverageMonths('2025-10-19', '2026-10-19', '12'), 12)
+  assert.equal(monthlyAverageMonths('2025-11-02', '2026-10-19', 'ALL'), 12)
+  assert.equal(monthlyAverageMonths('2026-01-31', '2026-02-01', 'CUSTOM'), 2)
+  assert.equal(monthlyAverageMonths('2026-02-01', '2026-02-28', 'CUSTOM'), 1)
+  assert.equal(monthlyAverageMonths('2026-03-01', '2026-02-28', 'CUSTOM'), 0)
 })
 
 test('weekly bucket keys use UTC Mondays across month/year and daylight-saving boundaries', () => {

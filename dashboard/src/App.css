@@ -234,6 +234,7 @@ input[aria-invalid='true'] { color: #a04e42; }
 .category-summary-label i, .rule-category-dot { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
 .category-summary-label strong { font-weight: 500; font-size: 12px; overflow-wrap: anywhere; }
 .category-summary-row small { display: block; color: var(--muted); font-size: 10px; margin-top: 4px; }
+.category-summary-row .monthly-average { color: #49745f; font-size: 9px; }
 .category-meter { height: 6px; background: #e7ede9; border-radius: 2px; overflow: hidden; }
 .category-meter > span { display: block; height: 100%; }
 .category-summary-amount { text-align: right; font-variant-numeric: tabular-nums; }
