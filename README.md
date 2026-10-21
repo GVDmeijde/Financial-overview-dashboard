@@ -2,6 +2,8 @@
 
 A local bank-account dashboard. Reads CSV exports from the workspace's `import/` folder and charts recorded daily closing balances for individual or combined accounts. Includes date filters, monthly gross cash flow, searchable transactions, categories, reusable categorization rules, transaction details, CSV download, and import reports.
 
+![Overview](./screenshots/overview-1.png)
+
 ## Run in WSL
 
 Requires Node.js 22.12+ (or a newer supported Node.js release) and npm inside WSL.
@@ -16,6 +18,8 @@ Open the localhost URL printed by Vite in your Windows browser. If the default p
 
 ## Imports
 
+![imports](./screenshots/imports.png)
+
 - Existing CSV files load automatically on opening the app.
 - Add files to `./import/` and click the rescan icon, or upload/drop files in the Imports view. Uploaded files are validated before being saved to that same folder. Existing files are never overwritten.
 - Import state is rebuilt from the source CSVs on refresh/rescan. No database or browser storage is required. To remove a source, move it out of `import/` and rescan.
@@ -24,6 +28,8 @@ Open the localhost URL printed by Vite in your Windows browser. If the default p
 - Maximum file size: 20 MB. Literal unescaped quotes that the CSV parser can recover are reported as warnings; invalid dates, amounts, field counts, or unrecoverable quoting reject the file.
 
 ## Transaction Categories
+
+![categories overview](./screenshots/categories-1.png)
 
 Bank CSVs are read-only source exports. Categorizing a transaction never updates a CSV. Category definitions, rules, and manual assignments are stored separately in `dashboard/data/categories.json` (relative to the workspace root), which is created on the first save and excluded from Git.
 
@@ -37,9 +43,13 @@ Bank CSVs are read-only source exports. Categorizing a transaction never updates
 - Deleting a category removes its rules and makes its manual assignments Uncategorized. Deleting a rule affects automatic matches but leaves manual assignments alone. Deletions require confirmation.
 - Category names are included in downloaded transaction views. The original bank export is never rewritten.
 
+![categories2](./screenshots/categories-2.png)
+
 Assignments use the stable account/currency/sequence transaction ID, so they survive app restarts, rescans, and overlapping exports. Back up **both** the source `import/` folder and `dashboard/data/`; the CSVs alone cannot restore your categories. Corrupt metadata is reported rather than silently overwritten. If another window saves first, rescan before retrying a stale update.
 
 ### Spending Charts and Category Details
+
+![Overview](./screenshots/overview-2.png)
 
 Overview and Categories include a spending pie chart, with each slice proportional to the category's gross debits. Zero-spend categories remain accessible in the category list but do not create slices. A period with no spending shows an empty state rather than a fabricated chart.
 
@@ -60,6 +70,8 @@ Detected transfers are excluded from money in/out, net external cash flow, month
 Reports show the excluded transfer entry count and incoming/outgoing totals for the selected accounts and period. The count is **bank entries**, not matched transfer pairs: a transfer may contribute two entries when both legs are present. Choose **View transfers**, or use the **Activity** filter in Transactions, to review internal transfers, external activity, or all activity. Transfer entries are labeled in the table and details. They are excluded from bulk category assignment, and their existing assignments/rules are preserved rather than rewritten. Downloaded transaction views include an **Internal transfer** flag; the original CSVs are unchanged.
 
 ### Regex Filters
+
+![transactions](./screenshots/transactions.png)
 
 Transaction search has a **Use regular expression** icon toggle. Category rules have a **Match type** menu: choose **Regular expression (RE2)**. Plain text remains the default, and existing saved rules retain their original behavior.
 
