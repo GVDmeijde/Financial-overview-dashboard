@@ -40,6 +40,16 @@ Bank CSVs are read-only source exports. Categorizing a transaction never updates
 
 Assignments use the stable account/currency/sequence transaction ID, so they survive app restarts, rescans, and overlapping exports. Back up **both** the source `import/` folder and `dashboard/data/`; the CSVs alone cannot restore your categories. Corrupt metadata is reported rather than silently overwritten. If another window saves first, rescan before retrying a stale update.
 
+### Languages
+
+The language menu offers **English** and **Nederlands**, in the desktop header or beside the mobile privacy control. It switches the interface immediately without clearing filters or unsaved category/rule edits. The choice is remembered in this browser's local storage; on the first visit, Dutch browser languages select Dutch and other languages fall back to English. Storage restrictions do not prevent language switching.
+
+Dates, chart labels, percentages, counts, and monetary display follow the selected language. Currency selection remains independent: changing language never converts amounts. Bank CSV parsing, transaction descriptions, merchant names, saved category names, and rule patterns are not translated or rewritten. Downloaded transaction CSVs retain their stable English column names and machine-readable values. Low-level parser/library diagnostics may retain their original technical details beneath a translated label.
+
+Translations use **i18next** and **react-i18next**. English source phrases are translation keys, with Dutch translations in `src/locales/nl.json`. English falls back to the source phrase; English plural variants are declared in `src/i18n.js`. Components access `t` and the current locale through `useLocale` in `src/localization.js`. Use interpolation for dynamic values and `count` with `_one`/`_other` entries for plurals; never translate user-provided names or rule values.
+
+To add another language, add its catalogue, register its resource bundle in `createI18n`, extend `supportedLanguages` and `localeFor`, and add an option to `LanguageSelector`. Extend the locale tests as well, including the weekly date label in `formatChartPeriod`. Run `npm test`, `npm run lint`, and `npm run build` through WSL. Translation tests check interface text coverage, interpolation placeholders, plural variants, language persistence/fallback, and locale-sensitive number/date formatting.
+
 ### Spending Charts and Category Details
 
 Overview and Categories include a spending pie chart, with each slice proportional to the category's gross debits. Zero-spend categories remain accessible in the category list but do not create slices. A period with no spending shows an empty state rather than a fabricated chart.

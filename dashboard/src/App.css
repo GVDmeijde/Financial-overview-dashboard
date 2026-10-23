@@ -41,6 +41,12 @@ nav { margin: 12px 0 30px; display: flex; flex-direction: column; gap: 5px; }
 .breadcrumb { display: flex; align-items: center; gap: 15px; font-size: 11px; color: #8b968f; }
 .breadcrumb strong { font-weight: 500; color: #4c5d53; }
 .topbar-actions { display: flex; align-items: center; gap: 19px; }
+.language-selector { width: 128px; flex-shrink: 0; padding-left: 33px; background-repeat: no-repeat; background-position: 9px center; background-size: 17px 12px; }
+.accounts-label { gap: 5px; flex-wrap: wrap; }
+.accounts-label .text-button { flex-shrink: 0; }
+.metric-label { overflow-wrap: anywhere; }
+.metric-label svg { flex-shrink: 0; }
+.category-summary-amount { overflow-wrap: anywhere; }
 .local-badge { color: #688574; display: flex; align-items: center; gap: 5px; font-size: 10px; }
 .avatar { border-radius: 50%; font-size: 11px; width: 29px; height: 29px; background: #e6ebe0; }
 main { max-width: 1650px; margin: auto; padding: 34px 38px 0; animation: enter .4s ease-out; }
@@ -284,9 +290,10 @@ input[type='color'] { width: 29px; height: 30px; padding: 2px; border: 1px solid
   .app-shell { flex-direction: column; }
   .sidebar { position: relative; width: 100%; height: auto; overflow: visible; padding: 18px 20px 14px; border-right: 0; border-bottom: 1px solid var(--border); }
   .mobile-privacy { display: block; position: absolute; right: 20px; top: 18px; }
-  .brand { padding: 0; }
-  .brand-second { display: inline; margin-left: 4px; font-size: 17px; font-family: 'Manrope', sans-serif; color: #25352f; font-weight: 700; }
-  .brand-icon { width: 32px; height: 32px; }
+  .brand { padding: 0 164px 0 0; font-size: 14px; }
+  .brand > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+  .brand-second { display: block; margin-left: 0; font-size: 11px; }
+  .brand-icon { width: 32px; height: 32px; flex-shrink: 0; }
   .workspace, .sidebar > .nav-label, .sidebar-bottom { display: none; }
   nav { flex-direction: row; margin: 19px 0 18px; gap: 4px; }
   .nav-item { justify-content: center; flex: 1; padding: 10px 4px; font-size: 10px; gap: 4px; min-width: 0; }
@@ -304,6 +311,8 @@ input[type='color'] { width: 29px; height: 30px; padding: 2px; border: 1px solid
   .account-balance { font-size: 13px; padding-top: 8px; overflow-wrap: anywhere; }
   .account-balance small { font-size: 8px; }
   .topbar { display: none; }
+  .mobile-privacy { display: flex; align-items: center; gap: 6px; }
+  .mobile-privacy .language-selector { width: 120px; }
   main { padding: 25px 20px 0; }
   .eyebrow { font-size: 8px; }
   h1 { font-size: 23px; }
