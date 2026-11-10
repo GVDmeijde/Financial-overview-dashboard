@@ -1,0 +1,37 @@
+name: .NET build pipeline
+
+# Triggers
+on:
+  push:
+    branches: [ main, development ]
+  pull_request:
+    branches: [ main, development ]
+
+#: Jobs to execute
+jobs:
+  ## Build all projects
+  build:
+    #runs-on: self-hosted
+    runs-on: ubuntu-latest
+
+    steps:
+    ### Checkout repo
+    - uses: actions/checkout@v3
+      with: 
+        fetch-depth: 0
+
+    ### Get version number
+    - name: Get version
+      id: gitversion
+      uses: KingTech/KingTech.GithubActions/gitversion@main
+
+
+    ### Build and publish SimpleFileServer image to dockerhub
+    - name: Build and push Docker image
+      uses: KingTech/KingTech.GithubActions/publish-docker@main
+      with:
+        image_name: "financial-overview"
+        docker_file: "dashboard/Dockerfile"
+        tags: "latest;${{ steps.gitversion.outputs.version }}"
+        registry_username: ${{ secrets.DOCKERHUB_USERNAME }}
+        registry_password: ${{ secrets.DOCKERHUB_TOKEN }}
