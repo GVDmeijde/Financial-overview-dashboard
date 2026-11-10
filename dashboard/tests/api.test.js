@@ -72,6 +72,54 @@ test('local API imports, deduplicates, rescans, and rejects unsafe or invalid up
   }
 })
 
+test('tags persist across server restarts and bulk edits never change bank exports or categories', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'financial-tags-'))
+  const directory = path.join(root, 'import')
+  const categoryFile = path.join(root, 'data', 'categories.json')
+  const source = `${csv}\n"NL01","EUR","2","2025-01-02","-5,00","+20,00"`
+  await mkdir(directory)
+  await writeFile(path.join(directory, 'bank.csv'), source)
+  let server
+  const start = async () => {
+    server = createServer(createApiHandler(directory, categoryFile))
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+    return `http://127.0.0.1:${server.address().port}`
+  }
+  let base = await start()
+  const read = async () => (await fetch(`${base}/api/data`)).json()
+  const send = (command) => fetch(`${base}/api/categories`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(command) })
+  try {
+    const initial = await read()
+    const ids = initial.transactions.map((transaction) => transaction.id)
+    const created = await send({ revision: 0, action: 'saveTag', tag: { name: 'Holiday' }, transactionIds: [ids[0]] })
+    assert.equal(created.status, 200)
+    const saved = await created.json()
+    const tagId = saved.tags[0].id
+    assert.deepEqual(saved.transactionTags[ids[0]], [tagId])
+    const bulk = await send({ revision: 1, action: 'tagTransactions', operation: 'add', tagId, transactionIds: ids })
+    assert.equal(bulk.status, 200)
+    const expected = await bulk.json()
+    await new Promise((resolve) => server.close(resolve))
+    base = await start()
+    const restarted = await read()
+    assert.deepEqual(restarted.categorization, expected)
+    assert.deepEqual(restarted.categorization.categories, initial.categorization.categories)
+    assert.deepEqual(restarted.categorization.rules, initial.categorization.rules)
+    assert.deepEqual(restarted.categorization.assignments, initial.categorization.assignments)
+    assert.equal((await send({ revision: 1, action: 'deleteTag', id: tagId })).status, 409)
+    assert.equal((await send({ revision: 2, action: 'saveTag', tag: { name: ' holiday ' } })).status, 400)
+    assert.equal((await readCategorization(categoryFile)).revision, 2)
+    const removed = await send({ revision: 2, action: 'tagTransactions', operation: 'remove', tagId, transactionIds: ids })
+    assert.equal(removed.status, 200)
+    assert.deepEqual((await removed.json()).transactionTags, {})
+    assert.equal(await readFile(path.join(directory, 'bank.csv'), 'utf8'), source)
+    assert.deepEqual(await readdir(directory), ['bank.csv'])
+  } finally {
+    await new Promise((resolve) => server.close(resolve))
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
 test('categories persist outside the import folder and never modify bank CSVs', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'financial-categories-'))
   const directory = path.join(root, 'import')

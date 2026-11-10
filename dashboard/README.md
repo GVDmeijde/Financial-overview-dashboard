@@ -18,6 +18,7 @@ Run the commands above from the repository root in WSL. Vite binds to `127.0.0.1
 
 - `src/App.jsx`: application state, filters, transaction browsing, imports, and language selection.
 - `src/Categories.jsx`: category and merchant analytics, category editors, and rule management.
+- `src/Tags.jsx`: inline tag management, any/all filters, bulk tag actions, and transaction tag editing/display.
 - `src/finance.js`: CSV decoding/parsing, exact monetary calculations, deduplication, balances, transfer detection, and reporting intervals.
 - `src/categories.js`: category resolution, rule matching/validation, and category/merchant aggregation.
 - `src/i18n.js`, `src/localization.js`, `src/locales/nl.json`: language policy, React localization, and Dutch translations.
@@ -59,6 +60,14 @@ Outside Docker, run `npm run build && npm start` to use the same production serv
 - `POST /api/categories` accepts JSON commands with the current revision. Reject stale revisions rather than overwriting another window's changes.
 
 Source exports live in the repository's `import/` directory. Categories, rules, and manual assignments live separately in `dashboard/data/categories.json`, which is gitignored. Transaction assignments use stable account/currency/sequence IDs. Category updates are serialized and saved using a temporary file and atomic rename. Corrupt metadata must be reported, not silently replaced.
+
+Tags share that metadata file and revision mechanism. `tags` holds `{ id, name }` definitions; `transactionTags` maps stable transaction IDs to arrays of tag IDs. Both fields are optional when reading legacy files and are initialized on the next metadata update. Do not rewrite existing files just to add empty tag fields. Tag names are unique after normalization and limited to 60 characters; tag IDs and assignments are validated, including duplicate or unknown references.
+
+The existing `POST /api/categories` endpoint also accepts `saveTag`, `deleteTag`, and `tagTransactions`. `saveTag` can include `transactionIds` to create-and-assign atomically. `tagTransactions` takes one `tagId`, an `operation` of `add` or `remove`, and 1-10,000 known transaction IDs. Add/remove is idempotent and preserves unrelated tags; deletion removes the tag's references and empty assignment entries. Tagging is independent of category resolution and is allowed on internal transfers.
+
+`matchesTransactionTags` implements any/all matching over selected tag IDs. The shared `TagFilter` control is used on Overview, category views, and Transactions. `summarizePeriod` accepts an optional `includeTransaction` predicate: tag scoping is applied after account/date selection, while internal-transfer detection still uses the complete selected-account history. Charts, activity totals, category breakdowns, transfer summaries, and transaction lists all use that scoped period. Recorded balances and balance history must continue using the original transactions.
+
+Transactions additionally applies its search, category, activity, and direction filters before pagination, export, and bulk actions. Ignore deleted tag filter IDs and reset pagination when the user changes tags or matching mode. Retain the shared tag selection when navigating from a category or overview report into Transactions. With no tags selected, reporting must match the unfiltered behavior. Exported tag names belong in the additional `Tags` column, never in the original bank CSV.
 
 Amounts are integer cents. Parse Dutch decimal-comma amounts and UTF-8/Windows-1252 exports. Deduplicate overlapping exports by account, currency, and sequence. Conflicting duplicates reject the affected file. Recoverable quoting issues produce notices; malformed dates, amounts, field counts, and unrecoverable quoting reject the file.
 

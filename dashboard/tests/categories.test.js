@@ -1,12 +1,99 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { categorySpendingByInterval, categorySummary, compileFilter, emptyCategorization, matchesRule, merchantIdentity, merchantSummary, monthlyCategorySpending, transactionCategory, updateCategorization, validateCategorization } from '../src/categories.js'
+import { categorySpendingByInterval, categorySummary, compileFilter, emptyCategorization, matchesRule, matchesTransactionTags, merchantIdentity, merchantSummary, monthlyCategorySpending, transactionCategory, transactionTags, updateCategorization, validateCategorization } from '../src/categories.js'
 import { cashflowByInterval, summarizePeriod } from '../src/finance.js'
 
 const transaction = { id: 'NL01:EUR:1', counterparty: 'ALBERT HEIJN', description: 'Weekly groceries', counterAccount: 'NL02', amount: -1234 }
 const rule = { categoryId: 'groceries', field: 'counterparty', value: 'Albert Heijn', direction: 'out' }
 let nextId = 0
 const update = (state, command) => updateCategorization(state, { revision: state.revision, ...command }, [transaction], () => `new-id-${++nextId}`)
+
+test('tags support legacy metadata, multiple assignments, filtering, renaming, and deletion', () => {
+  const legacy = emptyCategorization()
+  delete legacy.tags
+  delete legacy.transactionTags
+  assert.equal(validateCategorization(legacy), legacy)
+  assert.deepEqual(transactionTags(transaction, legacy), [])
+  let state = update(legacy, { action: 'saveTag', tag: { name: ' Holiday ' }, transactionIds: [transaction.id] })
+  const holiday = state.tags[0].id
+  state = update(state, { action: 'saveTag', tag: { name: 'Reimbursable' }, transactionIds: [transaction.id] })
+  const reimbursable = state.tags[1].id
+  assert.deepEqual(transactionTags(transaction, state).map((tag) => tag.name), ['Holiday', 'Reimbursable'])
+  assert.equal(matchesTransactionTags(transaction, state, [], 'all'), true)
+  assert.equal(matchesTransactionTags(transaction, state, [holiday, reimbursable], 'all'), true)
+  assert.equal(matchesTransactionTags(transaction, state, [holiday, 'other'], 'any'), true)
+  assert.equal(matchesTransactionTags(transaction, state, [holiday, 'other'], 'all'), false)
+  assert.equal(matchesTransactionTags({ ...transaction, id: 'untagged' }, state, [holiday]), false)
+  state = update(state, { action: 'tagTransactions', tagId: holiday, operation: 'add', transactionIds: [transaction.id] })
+  assert.equal(state.transactionTags[transaction.id].length, 2)
+  state = update(state, { action: 'saveTag', tag: { id: holiday, name: 'Travel' } })
+  assert.equal(transactionTags(transaction, state)[0].name, 'Travel')
+  state = update(state, { action: 'tagTransactions', tagId: holiday, operation: 'remove', transactionIds: [transaction.id] })
+  assert.deepEqual(state.transactionTags[transaction.id], [reimbursable])
+  state = update(state, { action: 'deleteTag', id: reimbursable })
+  assert.deepEqual(state.transactionTags, {})
+  assert.deepEqual(state.assignments, legacy.assignments)
+  assert.deepEqual(state.rules, legacy.rules)
+  assert.deepEqual(state.categories, legacy.categories)
+  assert.equal(legacy.tags, undefined)
+})
+
+test('invalid tag commands fail without changing metadata', () => {
+  const state = update(emptyCategorization(), { action: 'saveTag', tag: { name: 'Work' } })
+  const tagId = state.tags[0].id
+  const original = structuredClone(state)
+  assert.throws(() => update(state, { action: 'saveTag', tag: { name: ' work ' } }), /unique/)
+  assert.throws(() => update(state, { action: 'saveTag', tag: { name: '' } }), /unique/)
+  assert.throws(() => update(state, { action: 'saveTag', tag: { name: 'x'.repeat(61) } }), /unique/)
+  assert.throws(() => update(state, { action: 'deleteTag', id: 'missing' }), /Unknown tag/)
+  assert.throws(() => update(state, { action: 'tagTransactions', tagId, operation: 'replace', transactionIds: [transaction.id] }), /operation/)
+  assert.throws(() => update(state, { action: 'tagTransactions', tagId: 'missing', operation: 'add', transactionIds: [transaction.id] }), /Unknown tag/)
+  assert.throws(() => update(state, { action: 'tagTransactions', tagId, operation: 'add', transactionIds: [] }), /Choose/)
+  assert.throws(() => update(state, { action: 'tagTransactions', tagId, operation: 'add', transactionIds: ['missing'] }), /not found/)
+  assert.throws(() => update(state, { action: 'tagTransactions', revision: -1, tagId, operation: 'add', transactionIds: [transaction.id] }), /another window/)
+  assert.throws(() => validateCategorization({ ...state, tags: null }), /tag data/)
+  assert.throws(() => validateCategorization({ ...state, transactionTags: [] }), /tag data/)
+  assert.throws(() => validateCategorization({ ...state, transactionTags: { [transaction.id]: [tagId, tagId] } }), /duplicate/)
+  assert.deepEqual(state, original)
+})
+
+test('tag-scoped period totals reconcile with charts while transfer detection retains full account history', () => {
+  const makeTransaction = (id, accountId, amount, counterAccount = 'merchant', date = '2026-01-15') => ({ id, accountId, account: accountId, currency: 'EUR', amount, counterAccount, date, sequence: id })
+  const transactions = [
+    makeTransaction('debit', 'checking', -1000),
+    makeTransaction('credit', 'checking', 200),
+    makeTransaction('other-tag', 'checking', -300),
+    makeTransaction('transfer-out', 'checking', -500, 'savings'),
+    makeTransaction('transfer-in', 'savings', 500, 'checking'),
+    makeTransaction('outside-date', 'checking', -9000, 'merchant', '2025-12-01'),
+    makeTransaction('other-account', 'other', -8000),
+    makeTransaction('other-currency', 'checking-usd', -7000),
+    makeTransaction('untagged', 'checking', -100),
+  ]
+  const original = structuredClone(transactions)
+  const state = { ...emptyCategorization(), tags: [{ id: 'travel', name: 'Travel' }, { id: 'work', name: 'Work' }], assignments: { debit: 'groceries', 'other-tag': 'insurance' }, transactionTags: {
+    debit: ['travel'], credit: ['travel', 'work'], 'other-tag': ['work'], 'transfer-out': ['travel'], 'outside-date': ['travel'], 'other-account': ['travel'], 'other-currency': ['travel'],
+  } }
+  const summarize = (ids, mode = 'any', accounts = ['checking', 'savings']) => summarizePeriod(transactions, accounts, '2026-01-01', '2026-01-31', (transaction) => matchesTransactionTags(transaction, state, ids, mode))
+  const any = summarize(['travel', 'work'])
+  assert.equal(any.incoming, 200)
+  assert.equal(any.outgoing, 1300)
+  assert.equal(any.transferOutgoing, 500)
+  assert.equal(any.transferIncoming, 0)
+  assert.equal(any.internalTransferIds.has('transfer-in'), true)
+  assert.deepEqual(any.reportingTransactions.map((transaction) => transaction.id), ['debit', 'credit', 'other-tag'])
+  assert.equal(categorySummary(any.reportingTransactions, state).reduce((sum, category) => sum + category.outgoing, 0), any.outgoing)
+  assert.equal(categorySpendingByInterval(any.reportingTransactions, state).reduce((sum, bucket) => sum + bucket.total, 0), any.outgoing)
+  assert.equal(cashflowByInterval(any.reportingTransactions).reduce((sum, bucket) => sum + bucket.outgoing, 0), any.outgoing)
+  const all = summarize(['travel', 'work'], 'all')
+  assert.equal(all.incoming, 200)
+  assert.equal(all.outgoing, 0)
+  assert.deepEqual(all.transactions.map((transaction) => transaction.id), ['credit'])
+  assert.equal(summarize(['travel'], 'any', ['checking']).outgoing, 1500)
+  assert.equal(summarize(['missing']).transactions.length, 0)
+  assert.deepEqual(summarize([]), summarizePeriod(transactions, ['checking', 'savings'], '2026-01-01', '2026-01-31'))
+  assert.deepEqual(transactions, original)
+})
 
 test('rules match case-insensitive text, exact counter accounts, and direction', () => {
   assert.equal(matchesRule(transaction, rule), true)

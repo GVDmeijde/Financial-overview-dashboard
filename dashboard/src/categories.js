@@ -9,7 +9,7 @@ export const defaultCategories = [
 ]
 
 export function emptyCategorization() {
-  return { revision: 0, categories: defaultCategories.map((category) => ({ ...category })), rules: [], assignments: {} }
+  return { revision: 0, categories: defaultCategories.map((category) => ({ ...category })), rules: [], assignments: {}, tags: [], transactionTags: {} }
 }
 
 const normalize = (value) => value.normalize('NFKC').trim().toLocaleLowerCase('en-GB')
@@ -118,6 +118,32 @@ export function merchantSummary(transactions, categorization, categoryId) {
   return [...groups.values()].sort((left, right) => right.outgoing - left.outgoing || left.name.localeCompare(right.name))
 }
 
+export function transactionTags(transaction, state) {
+  const ids = state.transactionTags?.[transaction.id] || []
+  return (state.tags || []).filter((tag) => ids.includes(tag.id))
+}
+
+export function matchesTransactionTags(transaction, state, selectedIds, mode = 'any') {
+  if (!selectedIds.length) return true
+  const assigned = state.transactionTags?.[transaction.id] || []
+  return mode === 'all' ? selectedIds.every((id) => assigned.includes(id)) : selectedIds.some((id) => assigned.includes(id))
+}
+
+function tagTransactions(state, command, transactions) {
+  if (!['add', 'remove'].includes(command.operation)) throw new Error('Invalid tag operation')
+  if (!state.tags.some((tag) => tag.id === command.tagId)) throw new Error('Unknown tag')
+  if (!Array.isArray(command.transactionIds) || !command.transactionIds.length || command.transactionIds.length > 10000) throw new Error('Choose between 1 and 10,000 transactions')
+  const knownIds = new Set(transactions.map((transaction) => transaction.id))
+  for (const id of command.transactionIds) {
+    if (!knownIds.has(id)) throw new Error('Transaction not found; rescan and try again')
+    const assigned = new Set(state.transactionTags[id] || [])
+    if (command.operation === 'add') assigned.add(command.tagId)
+    else assigned.delete(command.tagId)
+    if (assigned.size) state.transactionTags[id] = [...assigned]
+    else delete state.transactionTags[id]
+  }
+}
+
 export function validateCategorization(state) {
   if (!state || !Number.isSafeInteger(state.revision) || state.revision < 0 || !Array.isArray(state.categories) || !Array.isArray(state.rules) || !state.assignments || typeof state.assignments !== 'object' || Array.isArray(state.assignments)) throw new Error('Invalid category data')
   const ids = new Set()
@@ -138,12 +164,26 @@ export function validateCategorization(state) {
   for (const categoryId of Object.values(state.assignments)) {
     if (categoryId !== '' && !ids.has(categoryId)) throw new Error('Unknown category assignment')
   }
+  if (state.tags !== undefined && !Array.isArray(state.tags)) throw new Error('Invalid tag data')
+  const tagIds = new Set()
+  const tagNames = new Set()
+  for (const tag of state.tags || []) {
+    if (!tag || typeof tag.id !== 'string' || !/^[a-zA-Z0-9-]{1,80}$/.test(tag.id) || tagIds.has(tag.id) || typeof tag.name !== 'string' || !tag.name.trim() || tag.name.length > 60 || tagNames.has(normalize(tag.name))) throw new Error('Tag names must be unique (1-60 characters)')
+    tagIds.add(tag.id)
+    tagNames.add(normalize(tag.name))
+  }
+  if (state.transactionTags !== undefined && (!state.transactionTags || typeof state.transactionTags !== 'object' || Array.isArray(state.transactionTags))) throw new Error('Invalid tag data')
+  for (const assigned of Object.values(state.transactionTags || {})) {
+    if (!Array.isArray(assigned) || new Set(assigned).size !== assigned.length || assigned.some((id) => !tagIds.has(id))) throw new Error('Unknown or duplicate tag assignment')
+  }
   return state
 }
 
 export function updateCategorization(state, command, transactions, createId) {
   if (command.revision !== state.revision) throw Object.assign(new Error('Categories changed in another window. Rescan and try again.'), { status: 409 })
   const next = structuredClone(state)
+  next.tags ??= []
+  next.transactionTags ??= {}
   if (command.action === 'saveCategory') {
     const category = { id: command.category?.id || createId(), name: command.category?.name?.trim(), color: command.category?.color }
     if (command.category?.id && !next.categories.some((item) => item.id === category.id)) throw new Error('Unknown category')
@@ -172,6 +212,23 @@ export function updateCategorization(state, command, transactions, createId) {
   } else if (command.action === 'deleteRule') {
     if (!next.rules.some((rule) => rule.id === command.id)) throw new Error('Unknown rule')
     next.rules = next.rules.filter((rule) => rule.id !== command.id)
+  } else if (command.action === 'saveTag') {
+    const tag = { id: command.tag?.id || createId(), name: typeof command.tag?.name === 'string' ? command.tag.name.trim() : '' }
+    if (command.tag?.id && !next.tags.some((item) => item.id === tag.id)) throw new Error('Unknown tag')
+    const index = next.tags.findIndex((item) => item.id === tag.id)
+    if (index < 0) next.tags.push(tag)
+    else next.tags[index] = tag
+    if (command.transactionIds !== undefined) tagTransactions(next, { tagId: tag.id, operation: 'add', transactionIds: command.transactionIds }, transactions)
+  } else if (command.action === 'deleteTag') {
+    if (!next.tags.some((tag) => tag.id === command.id)) throw new Error('Unknown tag')
+    next.tags = next.tags.filter((tag) => tag.id !== command.id)
+    for (const [id, assigned] of Object.entries(next.transactionTags)) {
+      const remaining = assigned.filter((tagId) => tagId !== command.id)
+      if (remaining.length) next.transactionTags[id] = remaining
+      else delete next.transactionTags[id]
+    }
+  } else if (command.action === 'tagTransactions') {
+    tagTransactions(next, command, transactions)
   } else throw new Error('Unknown category action')
   next.revision++
   return validateCategorization(next)

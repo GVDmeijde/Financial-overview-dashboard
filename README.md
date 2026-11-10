@@ -23,7 +23,7 @@ docker run -d --name financial-dashboard \
 Open **http://127.0.0.1:8765**. Keep and back up both named volumes:
 
 - **`financial-dashboard-imports`** stores uploaded bank CSV files.
-- **`financial-dashboard-data`** stores category definitions, matching rules, and manual transaction assignments.
+- **`financial-dashboard-data`** stores category definitions, matching rules, manual category assignments, custom tags, and transaction tag assignments.
 
 Reuse these volume names when replacing the container. Restarting the same container retains its files; a new container without explicit mounts gets fresh anonymous volumes. Existing imports and categories are not automatically copied into newly created named volumes, so preserve your old container and volumes until the data has been recovered or migrated.
 
@@ -50,6 +50,19 @@ Use the eye icon to hide displayed amounts. This masks the interface only, not t
 - Overlapping exports are deduplicated by account, currency, and transaction sequence. Conflicting duplicates reject the entire affected file and appear in the import report. Malformed files do not prevent valid files from loading.
 - Maximum file size: 20 MB. Literal unescaped quotes that the CSV parser can recover are reported as warnings; invalid dates, amounts, field counts, or unrecoverable quoting reject the file.
 
+## Transaction Tags
+
+Transactions can have multiple custom tags in addition to their category. Tags are managed directly in **Transactions**, without a separate tags page.
+
+- Open **Manage tags** to create, rename, or delete tags. Names must be unique and contain 1-60 characters. Deleting a tag requires confirmation and removes it from all transactions, without deleting transactions or changing categories.
+- Open a transaction's details to search for an existing tag, choose a suggestion, and use the plus button or Enter to add it. Assigned tags appear as chips; use a chip's remove button to unassign it. Creating a tag there also applies it to that transaction. Tags can also be added to internal transfers.
+- Open **Filter tags** on Overview, Categories, a category's detail page, or Transactions and select one or more tags. **Any selected tag** matches transactions with at least one of them; **All selected tags** requires every selected tag. The selection is shared between these views and retained when drilling into transactions. Clear the selection to show transactions regardless of tags. In Transactions, tag filters also combine with search, direction, activity, and category filters.
+- On Overview and category pages, tags filter external money in/out, net cash flow, spending charts and breakdowns, and transaction lists within the selected accounts, dates, and currency. Recorded closing balances, the balance-history chart, and sidebar account balances remain unchanged: they represent actual bank balances, not a balance reconstructed from tagged transactions. Closing the filter panel does not clear the selected tags; active tag chips remain visible.
+- Inside **Manage tags**, choose a tag and **Add tag** or **Remove tag**, then **Apply to filtered transactions** to update all current matches, not just the visible page (up to 10,000 transactions per action). Existing unrelated tags remain unchanged.
+- Assigned tags appear under transaction names. Downloaded transaction views include a **Tags** column with tag names separated by semicolons.
+
+Tags and their assignments are saved alongside category metadata, separately from bank CSVs. They survive rescans, overlapping imports, and app/container restarts when the data volume is preserved. Back up `financial-dashboard-data` as well as your source imports. Tag names are user data and do not change when switching interface languages.
+
 ## Transaction Categories
 
 ![categories overview](./screenshots/categories-1.png)
@@ -57,7 +70,7 @@ Use the eye icon to hide displayed amounts. This masks the interface only, not t
 Bank CSVs are read-only source exports. Categorizing a transaction never updates a CSV. Category definitions, rules, and manual assignments are stored separately in `dashboard/data/categories.json` (relative to the workspace root), which is created on the first save and excluded from Git.
 
 - Open **Categories** to manage Groceries, Mortgage, Insurance, Subscriptions, or your own categories. Names and colors are editable.
-- Assign an individual transaction from its category dropdown or details dialog. In **Transactions**, search/filter first and use the bulk assignment control to assign all matching results, not just the visible page (up to 10,000 at once).
+- Assign an individual transaction from its category dropdown or details dialog. In **Transactions**, search/filter first, then open **Assign category** to assign all matching results, not just the visible page (up to 10,000 at once).
 - Create a rule by matching counterparty/description text (case-insensitive contains) or a counterparty account (case-insensitive exact match), with an optional money-in/out restriction. The match preview covers all imported dates, accounts, and currencies. Rules affect existing and future matching transactions.
 - The saved rules list is paginated: 10 rules per page by default, with 25 and 50 available. Filter the list by category or choose All categories. Counts and page ranges reflect the filtered rules; changing the filter or page size returns to page one. The list stays newest-first, and these display controls do not change matching priority or saved rules.
 - The newest matching rule wins. Manual assignments, including explicitly choosing Uncategorized, take priority over rules. Choose **Use rules (clear override)** to remove a manual assignment.

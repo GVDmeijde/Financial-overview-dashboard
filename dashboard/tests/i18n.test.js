@@ -53,7 +53,7 @@ test('the Dutch catalogue keeps all interpolation values and plural pairs', asyn
 })
 
 test('interface text and static translation keys have Dutch coverage', () => {
-  for (const filename of ['App.jsx', 'Categories.jsx']) {
+  for (const filename of ['App.jsx', 'Categories.jsx', 'Tags.jsx']) {
     const tree = parse(readFileSync(new URL(`../src/${filename}`, import.meta.url), 'utf8'), { sourceType: 'module', plugins: ['jsx'] })
     function visit(node) {
       if (!node || typeof node !== 'object') return

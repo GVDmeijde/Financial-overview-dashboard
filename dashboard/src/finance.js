@@ -216,9 +216,9 @@ export function cashflowByInterval(transactions, interval = 'month', start, end)
   return [...buckets.values()]
 }
 
-export function summarizePeriod(transactions, accountIds, start, end) {
+export function summarizePeriod(transactions, accountIds, start, end, includeTransaction = () => true) {
   const internalTransferIds = findInternalTransfers(transactions, accountIds)
-  const filtered = transactions.filter((transaction) => accountIds.includes(transaction.accountId) && transaction.date >= start && transaction.date <= end)
+  const filtered = transactions.filter((transaction) => accountIds.includes(transaction.accountId) && transaction.date >= start && transaction.date <= end && includeTransaction(transaction))
   const reportingTransactions = filtered.filter((transaction) => !internalTransferIds.has(transaction.id))
   const internalTransfers = filtered.filter((transaction) => internalTransferIds.has(transaction.id))
   return {

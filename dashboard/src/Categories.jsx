@@ -1,7 +1,7 @@
 import { localizeError, useLocale } from './localization.js'
 import { useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { ArrowLeft, ArrowRight, Check, ChevronLeft, ChevronRight, Pencil, Plus, Save, Tags, Trash2, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, ChevronLeft, ChevronRight, FolderTree, Pencil, Plus, Save, Trash2, X } from 'lucide-react'
 import { categorySpendingByInterval, compileFilter, matchesRule, merchantIdentity, merchantSummary } from './categories.js'
 import { formatChartPeriod } from './finance.js'
 
@@ -55,7 +55,7 @@ export function CategoryBreakdown({ groups, money, onSelect, onManage, averageMo
   const { t, locale } = useLocale()
   const total = groups.reduce((sum, group) => sum + group.outgoing, 0)
   return <section className="category-breakdown">
-    <div className="section-heading"><div><h2>{t("Spending by category")}</h2><p className="section-subtitle">{t("Gross debits / Selected accounts and period")}</p></div>{onManage ? <button className="text-button" onClick={onManage}><Tags size={14} />{t("Manage categories")}</button> : <strong className="category-total">{money(total)}</strong>}</div>
+    <div className="section-heading"><div><h2>{t("Spending by category")}</h2><p className="section-subtitle">{t("Gross debits / Selected accounts and period")}</p></div>{onManage ? <button className="text-button" onClick={onManage}><FolderTree size={14} />{t("Manage categories")}</button> : <strong className="category-total">{money(total)}</strong>}</div>
     <div className="category-spending-grid"><SpendingPie groups={groups} money={money} onSelect={onSelect} label={t("Category spending pie chart")} />
     <div className="category-summary">{groups.map((group) => <button className="category-summary-row" key={group.id} onClick={() => onSelect(group.id)}>
       <span className="category-summary-label"><i style={{ background: group.color }} /><span><strong>{group.name}</strong><small>{t('{{count}} transactions', { count: group.count })}</small></span></span>
