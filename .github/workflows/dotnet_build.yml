@@ -28,10 +28,11 @@ jobs:
 
     ### Build and publish SimpleFileServer image to dockerhub
     - name: Build and push Docker image
-      uses: KingTechNL/githubactions/publish-docker@main
+      uses: KingTechNL/githubactions/publish-docker@feature/docker-build-parameters
       with:
         image_name: "financial-overview"
         docker_file: "dashboard/Dockerfile"
+        cache: true
         tags: "latest;${{ steps.gitversion.outputs.version }}"
         registry_username: ${{ secrets.DOCKERHUB_USERNAME }}
         registry_password: ${{ secrets.DOCKERHUB_TOKEN }}
