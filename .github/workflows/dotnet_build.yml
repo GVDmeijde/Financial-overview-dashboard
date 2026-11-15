@@ -23,12 +23,12 @@ jobs:
     ### Get version number
     - name: Get version
       id: gitversion
-      uses: KingTech/KingTech.GithubActions/gitversion@main
+      uses: KingTechNL/githubactions/gitversion@main
 
 
     ### Build and publish SimpleFileServer image to dockerhub
     - name: Build and push Docker image
-      uses: KingTech/KingTech.GithubActions/publish-docker@main
+      uses: KingTechNL/githubactions/publish-docker@main
       with:
         image_name: "financial-overview"
         docker_file: "dashboard/Dockerfile"
